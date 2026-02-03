@@ -1,0 +1,8 @@
+
+{
+  "name": "FlickNaija",
+  "description": "Discover movies & series legally in Nigeria. Low-data, mobile-first design for the modern Naija viewer with cultural insights powered by Gemini.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
