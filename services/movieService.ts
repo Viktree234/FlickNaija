@@ -1,13 +1,8 @@
-import { Movie, Platform } from '../types';
+import { Movie } from '../types';
 
-const TMDB_BASE = 'https://api.themoviedb.org/3';
-const IMG_BASE = 'https://image.tmdb.org/t/p';
-const DEFAULT_REGION = 'NG';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
-const apiKey = import.meta.env.VITE_TMDB_API_KEY || '';
-let genreMap: Record<number, string> | null = null;
-
-// Mock data simulating a Nigerian-focused response (fallback when API key is missing)
+// Mock data simulating a Nigerian-focused response (fallback when API is unavailable)
 const MOCK_MOVIES: Movie[] = [
   {
     id: 1,
@@ -106,33 +101,9 @@ const MOCK_MOVIES: Movie[] = [
 const fetchJson = async <T>(url: string): Promise<T> => {
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`TMDB request failed: ${res.status}`);
+    throw new Error(`API request failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
-};
-
-const getGenreMap = async (): Promise<Record<number, string>> => {
-  if (genreMap) return genreMap;
-  if (!apiKey) return {};
-  const data = await fetchJson<{ genres: { id: number; name: string }[] }>(
-    `${TMDB_BASE}/genre/movie/list?api_key=${apiKey}&language=en-US`
-  );
-  genreMap = data.genres.reduce<Record<number, string>>((acc, g) => {
-    acc[g.id] = g.name;
-    return acc;
-  }, {});
-  return genreMap;
-};
-
-const getGenreNames = async (ids: number[] | undefined): Promise<string[]> => {
-  if (!ids || ids.length === 0) return [];
-  const map = await getGenreMap();
-  return ids.map((id) => map[id]).filter(Boolean);
-};
-
-const buildImage = (path: string | null | undefined, size: string): string => {
-  if (!path) return '';
-  return `${IMG_BASE}/${size}${path}`;
 };
 
 export const toYouTubeEmbed = (urlOrKey: string): string => {
@@ -159,153 +130,52 @@ export const toYouTubeEmbed = (urlOrKey: string): string => {
   return '';
 };
 
-const providerCache = new Map<number, Platform[]>();
-
-const getWatchProviders = async (id: number): Promise<Platform[]> => {
-  if (!apiKey) return [];
-  if (providerCache.has(id)) return providerCache.get(id)!;
-
-  const data = await fetchJson<{ results: Record<string, { flatrate?: any[]; rent?: any[]; buy?: any[]; ads?: any[] }> }>(
-    `${TMDB_BASE}/movie/${id}/watch/providers?api_key=${apiKey}`
-  );
-
-  const region = data.results?.[DEFAULT_REGION];
-  const providers = [
-    ...(region?.flatrate || []),
-    ...(region?.ads || []),
-    ...(region?.rent || []),
-    ...(region?.buy || [])
-  ];
-
-  const mapped: Platform[] = providers.map((p) => ({
-    name: p.provider_name,
-    link: `https://www.themoviedb.org/movie/${id}/watch`,
-    price: region?.rent?.some((r) => r.provider_id === p.provider_id)
-      ? 'Rent'
-      : region?.buy?.some((b) => b.provider_id === p.provider_id)
-      ? 'Buy'
-      : region?.ads?.some((a) => a.provider_id === p.provider_id)
-      ? 'Free'
-      : 'Subscription',
-    logo: p.logo_path ? buildImage(p.logo_path, 'w92') : ''
-  }));
-
-  providerCache.set(id, mapped);
-  return mapped;
-};
-
-const derivePriceCategory = (platforms: Platform[]): Movie['priceCategory'] => {
-  if (platforms.some((p) => p.price === 'Free')) return 'Free';
-  if (platforms.some((p) => p.price === 'Subscription')) return 'Subscription';
-  if (platforms.some((p) => p.price === 'Rent')) return 'Rent';
-  if (platforms.some((p) => p.price === 'Buy')) return 'Buy';
-  return 'Subscription';
-};
-
-const mapMovie = async (item: any): Promise<Movie> => {
-  const [providers, genres] = await Promise.all([
-    getWatchProviders(item.id),
-    getGenreNames(item.genre_ids)
-  ]);
-  return {
-    id: item.id,
-    title: item.title || item.name || 'Untitled',
-    year: item.release_date ? Number(item.release_date.slice(0, 4)) : 0,
-    genres,
-    rating: Number((item.vote_average || 0).toFixed(1)),
-    poster_url: buildImage(item.poster_path, 'w500'),
-    backdrop_url: buildImage(item.backdrop_path, 'w1280'),
-    trailer_url: '',
-    description: item.overview || 'No description available.',
-    platforms: providers,
-    tags: [],
-    lowDataFriendly: false,
-    isAfro: false,
-    priceCategory: derivePriceCategory(providers)
-  };
-};
-
-const hydrateMovieDetails = async (movie: Movie): Promise<Movie> => {
-  if (!apiKey) return movie;
-  const [details, videos] = await Promise.all([
-    fetchJson<any>(`${TMDB_BASE}/movie/${movie.id}?api_key=${apiKey}&language=en-US`),
-    fetchJson<any>(`${TMDB_BASE}/movie/${movie.id}/videos?api_key=${apiKey}&language=en-US`)
-  ]);
-
-  const trailer = videos.results?.find((v: any) => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser'));
-
-  return {
-    ...movie,
-    genres: details.genres?.map((g: any) => g.name) || movie.genres,
-    runtime: details.runtime,
-    lowDataFriendly: details.runtime ? details.runtime <= 110 : movie.lowDataFriendly,
-    isAfro: details.production_countries?.some((c: any) => c.iso_3166_1 === 'NG') || movie.isAfro,
-    trailer_url: trailer ? toYouTubeEmbed(trailer.key) : movie.trailer_url
-  } as Movie;
-};
-
 export const getTrendingMovies = async (): Promise<Movie[]> => {
-  if (!apiKey) return MOCK_MOVIES;
-  const data = await fetchJson<any>(`${TMDB_BASE}/trending/movie/week?api_key=${apiKey}&region=${DEFAULT_REGION}`);
-  return Promise.all((data.results || []).slice(0, 12).map(mapMovie));
+  try {
+    return await fetchJson<Movie[]>(`${API_BASE}/movies/trending`);
+  } catch {
+    return MOCK_MOVIES;
+  }
 };
 
 export const getNewAfroFilms = async (): Promise<Movie[]> => {
-  if (!apiKey) return MOCK_MOVIES.filter((m) => m.isAfro);
-  const data = await fetchJson<any>(
-    `${TMDB_BASE}/discover/movie?api_key=${apiKey}&region=${DEFAULT_REGION}&with_origin_country=NG&sort_by=release_date.desc&include_adult=false`
-  );
-  return Promise.all((data.results || []).slice(0, 12).map(mapMovie));
+  try {
+    return await fetchJson<Movie[]>(`${API_BASE}/movies/new`);
+  } catch {
+    return MOCK_MOVIES.filter((m) => m.isAfro);
+  }
 };
 
 export const getCheapestPicks = async (): Promise<Movie[]> => {
-  if (!apiKey) return MOCK_MOVIES.filter((m) => m.priceCategory === 'Free' || m.priceCategory === 'Subscription');
-  const data = await fetchJson<any>(
-    `${TMDB_BASE}/discover/movie?api_key=${apiKey}&region=${DEFAULT_REGION}&with_watch_monetization_types=free|ads|flatrate&watch_region=${DEFAULT_REGION}`
-  );
-  return Promise.all((data.results || []).slice(0, 12).map(mapMovie));
+  try {
+    return await fetchJson<Movie[]>(`${API_BASE}/movies/cheapest`);
+  } catch {
+    return MOCK_MOVIES.filter((m) => m.priceCategory === 'Free' || m.priceCategory === 'Subscription');
+  }
 };
 
 export const getLowDataPicks = async (): Promise<Movie[]> => {
-  if (!apiKey) return MOCK_MOVIES.filter((m) => m.lowDataFriendly);
-  const data = await fetchJson<any>(
-    `${TMDB_BASE}/discover/movie?api_key=${apiKey}&region=${DEFAULT_REGION}&with_runtime.lte=110&sort_by=popularity.desc&include_adult=false`
-  );
-  return Promise.all((data.results || []).slice(0, 12).map(mapMovie));
+  try {
+    return await fetchJson<Movie[]>(`${API_BASE}/movies/low-data`);
+  } catch {
+    return MOCK_MOVIES.filter((m) => m.lowDataFriendly);
+  }
 };
 
 export const getMovieById = async (id: number): Promise<Movie | undefined> => {
-  if (!apiKey) return MOCK_MOVIES.find((m) => m.id === id);
-  const item = await fetchJson<any>(`${TMDB_BASE}/movie/${id}?api_key=${apiKey}&language=en-US`);
-  const providers = await getWatchProviders(item.id);
-  const baseMovie: Movie = {
-    id: item.id,
-    title: item.title || 'Untitled',
-    year: item.release_date ? Number(item.release_date.slice(0, 4)) : 0,
-    genres: item.genres?.map((g: any) => g.name) || [],
-    rating: Number((item.vote_average || 0).toFixed(1)),
-    poster_url: buildImage(item.poster_path, 'w500'),
-    backdrop_url: buildImage(item.backdrop_path, 'w1280'),
-    trailer_url: '',
-    description: item.overview || 'No description available.',
-    platforms: providers,
-    tags: [],
-    lowDataFriendly: item.runtime ? item.runtime <= 110 : false,
-    isAfro: item.production_countries?.some((c: any) => c.iso_3166_1 === 'NG') || false,
-    priceCategory: derivePriceCategory(providers)
-  };
-  return hydrateMovieDetails(baseMovie);
+  try {
+    return await fetchJson<Movie>(`${API_BASE}/movies/${id}`);
+  } catch {
+    return MOCK_MOVIES.find((m) => m.id === id);
+  }
 };
 
 export const searchMovies = async (query: string): Promise<Movie[]> => {
-  if (!apiKey) {
+  if (!query) return [];
+  try {
+    return await fetchJson<Movie[]>(`${API_BASE}/movies/search?query=${encodeURIComponent(query)}`);
+  } catch {
     const q = query.toLowerCase();
     return MOCK_MOVIES.filter((m) => m.title.toLowerCase().includes(q) || m.tags.some((t) => t.toLowerCase().includes(q)));
   }
-  if (!query) return [];
-  const data = await fetchJson<any>(
-    `${TMDB_BASE}/search/movie?api_key=${apiKey}&query=${encodeURIComponent(query)}&include_adult=false&region=${DEFAULT_REGION}`
-  );
-  const mapped = await Promise.all((data.results || []).slice(0, 20).map(mapMovie));
-  return mapped;
 };
