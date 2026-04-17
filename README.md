@@ -1,34 +1,53 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# FlickNaija
 
-# Run and deploy your AI Studio app
+Discover where to stream, rent, or buy movies legally in Nigeria. Optimized for low data and high vibes.
 
-This contains everything you need to run your app locally.
+## Features
+- Find streaming, rental, and purchase options for movies in Nigeria
+- AI-powered movie recommendations via Gemini
+- Curated sections: Trending, Cheapest Picks, New Afro Films, Low Data Picks
+- Mobile-first design for Nigerian audiences
 
-View your app in AI Studio: https://ai.studio/apps/temp/1
+## Tech Used
+- React + TypeScript + Vite
+- Tailwind CSS
+- TMDB API (movie data)
+- Gemini API (AI recommendations)
+- Express.js (backend server)
+- Expo React Native (mobile app in `/APP`)
 
-## Run Locally
+## Live Demo
+https://flicknaija.onrender.com
 
-**Prerequisites:**  Node.js
+## Screenshot
+![FlickNaija](https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6)
 
+## Getting Started
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Set the `TMDB_API_KEY` in [.env.local](.env.local) to your TMDB API key
-4. Run the API server:
-   `npm run server`
-5. Run the app:
-   `npm run dev`
+### Prerequisites
+- Node.js
+- TMDB API key
+- Gemini API key
 
-## Deploy on Render
+### Installation
+```bash
+npm install
+```
 
-This repo includes a `render.yaml` that provisions both backend and frontend.
+### Configuration
+Create a `.env.local` file with:
+```
+VITE_TMDB_API_KEY=your_tmdb_api_key
+VITE_GEMINI_API_KEY=your_gemini_api_key
+```
 
-1. Create a new Render Blueprint and point it at this repo.
-2. Set backend env vars in Render:
-   - `TMDB_API_KEY`
-   - `GEMINI_API_KEY`
-   - `TMDB_REGION` (optional, defaults to `NG`)
-3. The frontend uses `VITE_API_BASE` (set in `render.yaml`) to call the API.
+### Running
+```bash
+npm run server  # Start backend
+npm run dev     # Start frontend
+```
+
+### Deploying
+This project includes a `render.yaml` for deployment to Render:
+1. Create a new Render Blueprint pointing to this repo
+2. Set environment variables: `TMDB_API_KEY`, `GEMINI_API_KEY`
